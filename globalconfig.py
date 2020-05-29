@@ -4,8 +4,8 @@ class GlobalConfig:
     text_font: str = None
     background: str = 'gray1'
     digit_color: str = 'red2'
-    digit_size: int = 500
-    text_size: int = 50
+    digit_size: int = 100
+    text_size: int = 30
     text_color: str = 'snow'
     clock_hour: bool = False
     clock_min: bool = True

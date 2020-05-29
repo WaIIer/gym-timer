@@ -88,3 +88,9 @@ class EmomTimer(Timer):
         for timer in self.timers:
             timer.start()
             timer.join()
+
+
+if __name__ == '__main__':
+    t = Timer(timedelta(seconds=10*60))
+    t.start()
+    t.timer_thread.join()

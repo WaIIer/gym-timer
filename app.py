@@ -11,7 +11,7 @@ from globalconfig import GlobalConfig
 
 class app(tk.Tk):
     def __init__(self):
-        tk.Tk.__init__(self, screenName=Strings.window_name)
+        tk.Tk.__init__(self)
 
         self.timer = None
 
