@@ -4,6 +4,7 @@ from globalconfig import GlobalConfig
 
 host = ''
 
+
 def default_on_update(msg: str) -> None:
     ServerController.last_message = msg
 
@@ -16,6 +17,7 @@ class ServerController:
 
     @staticmethod
     def update(msg: str) -> None:
+        msg = msg.rstrip()
         if ServerController.on_update:
             ServerController.on_update(msg)
 

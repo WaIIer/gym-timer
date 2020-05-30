@@ -156,7 +156,7 @@ class app(tk.Tk):
         self.reset_cycle_conters()
 
         def set_time(msg: str) -> None:
-            if not msg and self.td_seconds > 0:
+            if ((not msg) or msg == 'START') and self.td_seconds > 0:
                 while len(self.config_digits) < self.config_max_digits:
                     self.config_digits.insert(0, 0)
                 return
