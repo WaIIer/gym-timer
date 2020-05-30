@@ -3,6 +3,7 @@ from datetime import timedelta
 from tkinter import StringVar
 from strings_en import Strings
 from copy import deepcopy
+from globalconfig import GlobalConfig
 import time
 
 
@@ -70,7 +71,8 @@ class Timer:
                 delta = current - last_tick
                 self.time_remaining -= timedelta(seconds=delta)
                 last_tick = current
-                self.output_timer()
+                if GlobalConfig.output_timer:
+                    self.output_timer()
             self.running = False
 
         self.timer_thread = Thread(target=__run_timer, args=(self,))

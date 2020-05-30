@@ -10,6 +10,7 @@ from webserver import ServerController, run_server, stop_server
 from globalconfig import GlobalConfig
 from enum import Enum
 from lib import int_list_to_int
+import inspect
 
 
 class AppState(Enum):
@@ -18,6 +19,49 @@ class AppState(Enum):
     CONFIG = 2
     PAUSED = 3
     WAITING = 4
+
+
+class TimeUpdate:
+    def __init__(self, hour=-1, min=-1, sec=-1, ms=-1):
+        self.hour = hour
+        self.min = min
+        self.sec = sec
+        self.ms = ms
+
+    def get_time_delta(self) -> timedelta:
+        return timedelta(hours=int(self.hour),
+                         minutes=int(self.min),
+                         seconds=int(self.sec),
+                         milliseconds=int(self.ms))
+
+    def update_last_update(self, previous) -> bool:
+        changed = False
+
+        if self.hour != -1 and previous.hour != self.hour:
+            previous.hour = self.hour
+            changed = True
+        if self.min != -1 and previous.min != self.min:
+            previous.min = self.min
+            changed = True
+        if self.sec != -1 and previous.sec != self.sec:
+            previous.sec = self.sec
+            changed = True
+        if self.ms != -1 and previous.ms != self.ms:
+            previous.ms = self.ms
+            changed = True
+        return changed
+
+    def contains_placeholder(self) -> bool:
+        return self.ms == -1 or self.sec == -1 or self.min == -1 or self.hour == -1
+
+    def __str__(self):
+        ret = ''
+        if GlobalConfig.clock_hour:
+            ret += f'{self.hour}:'
+        ret += f'{self.min}:{self.sec}'
+        if GlobalConfig.clock_ms_digits > 0:
+            ret += f'.{self.ms}'
+        return ret
 
 
 class app(tk.Tk):
@@ -40,6 +84,13 @@ class app(tk.Tk):
         self.timer: Timer = None
         self.alive = True
         self.display_seconds = -1.0
+        self.display_ms = -1.0
+        self.clock_str = ''
+        self.last_time_update = TimeUpdate(0, 0, 0, 0)
+        self.td_seconds = 0
+        self.td_ms = 0
+        self.last_time_delta = timedelta()
+        self.timer_length = timedelta()
         self.state_cycles = {
             AppState.INIT: 0,
             AppState.RUNNING: 0,
@@ -108,34 +159,22 @@ class app(tk.Tk):
         Set the value of the clock based on the supplied timdelta
         and the parameters in global config
         """
-        self.td_seconds = delta.total_seconds()
-        if self.td_seconds == self.display_seconds:
-            return
-        if self.td_seconds == 0:
-            self.display_seconds = self.td_seconds
-            self.set_clock_stringvar(0, 0, 0)
-            return
+        try:
+            self.last_time_delta = delta
+            time_delta_str = str(delta)
+            hours, minutes, seconds = time_delta_str.split(':')
+            if '.' in seconds:
+                seconds, mseconds = seconds.split('.')
+                mseconds = mseconds[:GlobalConfig.clock_ms_digits]
+            else:
+                mseconds = '0'
+            self.last_time_update = TimeUpdate(hours, minutes, seconds, mseconds)
+            self.update_clock()
+        except:
+            print(delta)
 
-        seconds = self.td_seconds
-        hrs = int(seconds // 3600)
-        seconds = seconds % 3600
-        mins = int(seconds // 60)
-        seconds = seconds % 60
-        self.set_clock_stringvar(hrs, mins, seconds)
-
-    def set_clock_stringvar(self, hrs: int, mins: int, secs: float) -> None:
-        clock_str = ''
-        if GlobalConfig.clock_hour:
-            clock_str += f'{str(hrs)}:'
-        clock_str += f'{str(mins).zfill(2)}:'
-        if GlobalConfig.clock_ms_digits > 0:
-            clock_str += '{0:0{1}.{2}f}'.format(
-                secs, GlobalConfig.clock_ms_digits+3,
-                GlobalConfig.clock_ms_digits)
-        else:
-            clock_str += str(int(secs))
-
-        self.clock_stringvar.set(clock_str)
+    def update_clock(self) -> None:
+        self.clock_stringvar.set(str(self.last_time_update))
 
     def update(self):
         """
@@ -152,7 +191,7 @@ class app(tk.Tk):
             return self.kill_app(e)
 
     def init_config(self) -> None:
-        self.set_clock(timedelta(seconds=0))
+        self.set_clock(timedelta(seconds=0.0))
         self.reset_cycle_conters()
 
         def set_time(msg: str) -> None:
@@ -178,6 +217,7 @@ class app(tk.Tk):
         self.show_microwave_time(self.config_digits)
         self.config_current_digit = len(self.config_digits)
         if self.config_current_digit == self.config_max_digits:
+            self.timer_length = self.last_time_delta
             self.state = AppState.RUNNING
 
     def init_running(self) -> None:
@@ -196,8 +236,7 @@ class app(tk.Tk):
 
         ServerController.on_update = running_server_update
         if not self.timer:
-            self.timer_length = self.td_seconds
-            self.timer = Timer(timedelta(seconds=self.timer_length))
+            self.timer = Timer(self.timer_length)
             self.timer.start()
 
     def run_running(self) -> None:
@@ -305,7 +344,7 @@ class app(tk.Tk):
             self.timer.restart()
             self.state = AppState.PAUSED
         else:
-            self.timer = Timer(timedelta(seconds=self.timer_length))
+            self.timer = Timer(self.timer_length)
             self.timer.start()
             self.state = AppState.RUNNING
 
