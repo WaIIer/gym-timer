@@ -1,3 +1,5 @@
+import sys
+
 class GlobalConfig:
     fullscreen: bool = False
     digit_font: str = 'DSEG7 Modern-Regular'
@@ -13,3 +15,10 @@ class GlobalConfig:
     server_port: int = 5050
     message_bits: int = 64
     encoding: str = 'ascii'
+
+# RPi specific config
+if sys.platform == "linux":
+    GlobalConfig.digit_font = 'DSEG7 Modern'
+    GlobalConfig.fullscreen = True
+    GlobalConfig.digit_size = 300
+    clock_ms_digits: int = 0  # set to 0 to disable ms
