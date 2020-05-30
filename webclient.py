@@ -1,8 +1,12 @@
+import sys
 import time
 import socket
 from globalconfig import GlobalConfig
 
-host = socket.gethostbyname(socket.gethostname())
+if sys.argv[1] == 'pi':
+    host = socket.gethostbyname('raspberrypi.local')
+else:
+    host = socket.gethostbyname(socket.gethostname())
 
 
 def main():
@@ -15,8 +19,8 @@ def main():
 
     while True:
         msg = input()
-        if not msg:
-            return
+        # if not msg:
+        #     return
 
         client_socket.sendto(msg.encode('ascii'), addr)
 

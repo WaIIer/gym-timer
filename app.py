@@ -8,11 +8,22 @@ import datetime
 from datetime import timedelta
 from webserver import ServerController, run_server, stop_server
 from globalconfig import GlobalConfig
+from enum import Enum
+from lib import int_list_to_int
+
+
+class AppState(Enum):
+    INIT = 0
+    RUNNING = 1
+    CONFIG = 2
+    PAUSED = 3
+    WAITING = 4
 
 
 class app(tk.Tk):
     def __init__(self):
         tk.Tk.__init__(self)
+        self.state = AppState.INIT
 
         self.initialize_variables()
         self.config(bg=GlobalConfig.background)
@@ -23,10 +34,19 @@ class app(tk.Tk):
         self.initialize_ui()
         self.initialize_server()
 
+        self.state = AppState.CONFIG
+
     def initialize_variables(self) -> None:
         self.timer: Timer = None
         self.alive = True
         self.display_seconds = -1.0
+        self.state_cycles = {
+            AppState.INIT: 0,
+            AppState.RUNNING: 0,
+            AppState.CONFIG: 0,
+            AppState.PAUSED: 0,
+            AppState.WAITING: 0,
+        }
 
     def grid_setup(self) -> None:
         """
@@ -88,15 +108,15 @@ class app(tk.Tk):
         Set the value of the clock based on the supplied timdelta
         and the parameters in global config
         """
-        td_seconds = delta.total_seconds()
-        if td_seconds == self.display_seconds:
+        self.td_seconds = delta.total_seconds()
+        if self.td_seconds == self.display_seconds:
             return
-        if td_seconds == 0:
-            self.display_seconds = td_seconds
+        if self.td_seconds == 0:
+            self.display_seconds = self.td_seconds
             self.set_clock_stringvar(0, 0, 0)
             return
 
-        seconds = td_seconds
+        seconds = self.td_seconds
         hrs = int(seconds // 3600)
         seconds = seconds % 3600
         mins = int(seconds // 60)
@@ -131,17 +151,95 @@ class app(tk.Tk):
             # On exception close app
             return self.kill_app(e)
 
-    def app_update(self) -> None:
-        """
-        Custom update code
-        """
-        if self.timer is None:
-            self.timer = Timer(timer_length=timedelta(seconds=120))
-            self.set_clock(self.timer.time_remaining)
-        elif self.timer.running:
-            self.set_clock(self.timer.time_remaining)
-        elif self.timer.finished:
-            self.timer.restart()
+    def init_config(self) -> None:
+        self.set_clock(timedelta(seconds=0))
+        self.reset_cycle_conters()
+
+        def set_time(msg: str) -> None:
+            if not msg and self.td_seconds > 0:
+                while len(self.config_digits) < self.config_max_digits:
+                    self.config_digits.insert(0, 0)
+                return
+            try:
+                digit = int(msg[0])
+            except Exception:
+                return
+            self.config_digits.append(digit)
+
+        self.info_stringvar.set(Strings.config)
+        self.config_max_digits = 6 if GlobalConfig.clock_hour else 4
+        self.config_current_digit = 0
+        self.config_digits = []
+        ServerController.on_update = set_time
+
+    def run_config(self) -> None:
+        if self.config_current_digit == len(self.config_digits):
+            return
+        self.show_microwave_time(self.config_digits)
+        self.config_current_digit = len(self.config_digits)
+        if self.config_current_digit == self.config_max_digits:
+            self.state = AppState.RUNNING
+
+    def init_running(self) -> None:
+        self.reset_cycle_conters()
+        self.info_stringvar.set(Strings.running)
+
+        def running_server_update(msg: str) -> None:
+            msg = msg.upper()
+            if msg == 'PAUSE':
+                self.timer.pause()
+                self.state = AppState.PAUSED
+            if msg == 'STOP':
+                self
+            if msg == 'RESTART':
+                self.restart_timer()
+
+        ServerController.on_update = running_server_update
+        if not self.timer:
+            self.timer_length = self.td_seconds
+            self.timer = Timer(timedelta(seconds=self.timer_length))
+            self.timer.start()
+
+    def run_running(self) -> None:
+        self.set_clock(self.timer.time_remaining)
+        if self.timer.finished:
+            self.kill_timer()
+            self.state = AppState.WAITING
+
+    def init_waiting(self) -> None:
+        self.info_stringvar.set(Strings.waiting)
+        self.reset_cycle_conters()
+
+        def waiting_server_update(msg: str) -> None:
+            msg = msg.upper()
+            if msg == 'RESTART':
+                self.restart_timer()
+            elif msg == 'CONFIG':
+                self.state = AppState.CONFIG
+
+        ServerController.on_update = waiting_server_update
+        self.state_cycles[AppState.WAITING] = 1
+
+    def init_paused(self) -> None:
+        self.info_stringvar.set(Strings.paused)
+        self.reset_cycle_conters()
+        self.set_clock(self.timer.time_remaining)
+
+        def paused_on_server_update(msg: str) -> None:
+            msg = msg.upper()
+            if msg == 'RESUME' or msg == 'RUN':
+                self.state = AppState.RUNNING
+                print('resuming')
+                self.timer.resume()
+            elif msg == 'RESTART':
+                self.restart_timer()
+            elif msg == 'CONFIG':
+                self.state = AppState.CONFIG
+
+        ServerController.on_update = paused_on_server_update
+
+    def run_paused(self) -> None:
+        self.set_clock(self.timer.time_remaining)
 
     def initialize_server(self):
         """
@@ -154,8 +252,6 @@ class app(tk.Tk):
         def on_server_msg(msg: str) -> None:
             msg = msg.upper()
             print(msg)
-            if msg == 'START':
-                self.timer.start()
 
         ServerController.on_update = on_server_msg
         run_server()
@@ -165,10 +261,90 @@ class app(tk.Tk):
         Kill the app and close other threads, etc.
         """
         print(e)
-        self.timer.kill = True
+        if self.timer:
+            self.timer.kill = True
         self.alive = False
         stop_server()
         return False
+
+    def show_microwave_time(self, num_list: []) -> None:
+        """
+        [1] -> 00:01
+        [1, 2] -> 00:12
+        [1, 2, 3] -> 1:23
+        [1, 2, 3, 4] -> 12:34
+        """
+        if len(num_list) == 0:
+            return
+        if len(num_list) <= 2:
+            secs = int_list_to_int(num_list)
+            self.set_clock(timedelta(seconds=secs))
+        elif len(num_list) <= 4:
+            secs = int_list_to_int(num_list[-2:])
+            mins = int_list_to_int(num_list[:-2])
+            self.set_clock(timedelta(seconds=secs, minutes=mins))
+        else:
+            hrs = int_list_to_int(num_list[:-4])
+            min_sec = num_list[-4:]
+            secs = int_list_to_int(min_sec[-2:])
+            mins = int_list_to_int(min_sec[:-2])
+            self.set_clock(timedelta(seconds=secs, minutes=mins, hours=hrs))
+
+    def reset_cycle_conters(self) -> None:
+        for key in self.state_cycles:
+            self.state_cycles[key] = 0
+
+    def kill_timer(self) -> None:
+        if self.timer:
+            self.timer.kill = True
+            self.timer.join()
+            self.timer = None
+
+    def restart_timer(self) -> None:
+        if self.timer:
+            self.timer.restart()
+            self.state = AppState.PAUSED
+        else:
+            self.timer = Timer(timedelta(seconds=self.timer_length))
+            self.timer.start()
+            self.state = AppState.RUNNING
+
+    def increment_cycles(self, state: AppState) -> None:
+        try:
+            self.state_cycles[state] = (self.state_cycles[state] % 1000000) + 1
+        except Exception:
+            return
+
+    def app_update(self) -> None:
+        """
+        Custom update code
+        """
+
+        if self.state == AppState.CONFIG:
+            if self.state_cycles[AppState.CONFIG] == 0:
+                self.init_config()
+            else:
+                self.run_config()
+            self.increment_cycles(AppState.CONFIG)
+        elif self.state == AppState.RUNNING:
+            if self.state_cycles[AppState.RUNNING] == 0:
+                self.init_running()
+            else:
+                self.run_running()
+            self.increment_cycles(AppState.RUNNING)
+        elif self.state == AppState.WAITING:
+            if self.state_cycles[AppState.WAITING] == 0:
+                self.init_waiting()
+            else:
+                pass
+        elif self.state == AppState.PAUSED:
+            if self.state_cycles[AppState.PAUSED] == 0:
+                self.init_paused()
+            else:
+                self.run_paused()
+            self.increment_cycles(AppState.PAUSED)
+        else:
+            pass
 
 
 if __name__ == "__main__":

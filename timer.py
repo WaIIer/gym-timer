@@ -18,7 +18,6 @@ class Timer:
         tk_string_var: StringVar = None,
     ):
         self.clock = 0
-        self.pause = False
         self.kill = False
         # backup to allow restarting timer
         self.__backup_length = deepcopy(timer_length)
@@ -30,6 +29,20 @@ class Timer:
         self.running = False
         self.finished = False
         self.string_var = tk_string_var
+
+    def pause(self) -> timedelta:
+        if not self.timer_thread:
+            return timedelta(seconds=0)
+        self.kill = True
+        self.timer_thread.join()
+        self.timer_thread = None
+        self.running = False
+        self.finished = False
+        return self.time_remaining
+
+    def resume(self) -> None:
+        self.kill = False
+        self.start()
 
     def output_timer(self) -> None:
         if self.string_var is not None:
@@ -99,9 +112,11 @@ class EmomTimer(Timer):
 
 
 if __name__ == '__main__':
-    t = Timer(timedelta(seconds=3))
+    t = Timer(timedelta(seconds=10))
     t.start()
-    t.join()
-    t.restart()
-    t.start()
+    time.sleep(1)
+    t.pause()
+    time.sleep(1)
+    t.resume()
+    input()
     t.join()
