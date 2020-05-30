@@ -2,6 +2,7 @@ from threading import Thread
 from datetime import timedelta
 from tkinter import StringVar
 from strings_en import Strings
+from copy import deepcopy
 import time
 
 
@@ -19,12 +20,15 @@ class Timer:
         self.clock = 0
         self.pause = False
         self.kill = False
-        self.__backup_length = timer_length  # backup to allow restarting timer
+        # backup to allow restarting timer
+        self.__backup_length = deepcopy(timer_length)
         self.timer_thread: Thread = None
         self.print_prefix = print_prefix
-        self.time_remaining = timer_length  # used to implement the timer
+        # used to implement the timer
+        self.time_remaining = deepcopy(timer_length)
         self.prefix = print_prefix
         self.running = False
+        self.finished = False
         self.string_var = tk_string_var
 
     def output_timer(self) -> None:
@@ -41,14 +45,15 @@ class Timer:
     def start(self) -> None:
         # Fork a process to start the timer
         def __run_timer(self) -> None:
-            last_tick = time.time()
+            last_tick = time.monotonic()
             self.running = True
             while not self.kill:
                 if self.time_remaining.total_seconds() <= 0:
                     self.reset_output()
                     self.running = False
+                    self.finished = True
                     return
-                current = time.time()
+                current = time.monotonic()
                 delta = current - last_tick
                 self.time_remaining -= timedelta(seconds=delta)
                 last_tick = current
@@ -63,10 +68,13 @@ class Timer:
             self.kill = True
             self.timer_thread.join()
             self.kill = False
-        self.time_remaining = self.__backup_length
+        self.time_remaining = deepcopy(self.__backup_length)
         self.running = False
+        self.finished = False
 
     def join(self):
+        if not self.timer_thread:
+            return
         self.timer_thread.join()
 
 
@@ -91,6 +99,9 @@ class EmomTimer(Timer):
 
 
 if __name__ == '__main__':
-    t = Timer(timedelta(seconds=10*60))
+    t = Timer(timedelta(seconds=3))
     t.start()
-    t.timer_thread.join()
+    t.join()
+    t.restart()
+    t.start()
+    t.join()

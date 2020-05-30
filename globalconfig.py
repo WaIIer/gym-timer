@@ -8,6 +8,8 @@ class GlobalConfig:
     text_size: int = 30
     text_color: str = 'snow'
     clock_hour: bool = False
-    clock_min: bool = True
-    clock_sec: bool = True
-    clock_ms: bool = False
+    clock_ms_digits: int = 1  # set to 0 to disable ms
+    web_server: bool = True
+    server_port: int = 5050
+    message_bits: int = 64
+    encoding: str = 'ascii'

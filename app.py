@@ -6,6 +6,7 @@ import threading
 import time
 import datetime
 from datetime import timedelta
+from webserver import ServerController, run_server, stop_server
 from globalconfig import GlobalConfig
 
 
@@ -13,14 +14,19 @@ class app(tk.Tk):
     def __init__(self):
         tk.Tk.__init__(self)
 
-        self.timer = None
-
+        self.initialize_variables()
         self.config(bg=GlobalConfig.background)
         self.apply_global_config()
         self.grid_setup()
         self.initialize_ui_elements()
         self.pack_ui()
         self.initialize_ui()
+        self.initialize_server()
+
+    def initialize_variables(self) -> None:
+        self.timer: Timer = None
+        self.alive = True
+        self.display_seconds = -1.0
 
     def grid_setup(self) -> None:
         """
@@ -82,12 +88,34 @@ class app(tk.Tk):
         Set the value of the clock based on the supplied timdelta
         and the parameters in global config
         """
-        time_str = str(delta)
-        if not GlobalConfig.clock_hour:
-            min_start = time_str.find(':') + 1
-            time_str = time_str[min_start:]
-        # TODO add other cases
-        self.clock_stringvar.set(time_str[:time_str.find('.')+2])
+        td_seconds = delta.total_seconds()
+        if td_seconds == self.display_seconds:
+            return
+        if td_seconds == 0:
+            self.display_seconds = td_seconds
+            self.set_clock_stringvar(0, 0, 0)
+            return
+
+        seconds = td_seconds
+        hrs = int(seconds // 3600)
+        seconds = seconds % 3600
+        mins = int(seconds // 60)
+        seconds = seconds % 60
+        self.set_clock_stringvar(hrs, mins, seconds)
+
+    def set_clock_stringvar(self, hrs: int, mins: int, secs: float) -> None:
+        clock_str = ''
+        if GlobalConfig.clock_hour:
+            clock_str += f'{str(hrs)}:'
+        clock_str += f'{str(mins).zfill(2)}:'
+        if GlobalConfig.clock_ms_digits > 0:
+            clock_str += '{0:0{1}.{2}f}'.format(
+                secs, GlobalConfig.clock_ms_digits+3,
+                GlobalConfig.clock_ms_digits)
+        else:
+            clock_str += str(int(secs))
+
+        self.clock_stringvar.set(clock_str)
 
     def update(self):
         """
@@ -101,26 +129,46 @@ class app(tk.Tk):
             return True
         except Exception as e:
             # On exception close app
-            print(e)
-            self.timer.kill = True
-            return False
+            return self.kill_app(e)
 
     def app_update(self) -> None:
         """
         Custom update code
         """
         if self.timer is None:
-            print('Awaiting input')
-            input()
-            self.timer = Timer(timer_length=timedelta(
-                seconds=10))
-            self.timer.start()
-        else:
-            if not self.timer.running:
-                print("Timer is not runing")
-                self.timer = None
-            else:
-                self.set_clock(delta=self.timer.time_remaining)
+            self.timer = Timer(timer_length=timedelta(seconds=120))
+            self.set_clock(self.timer.time_remaining)
+        elif self.timer.running:
+            self.set_clock(self.timer.time_remaining)
+        elif self.timer.finished:
+            self.timer.restart()
+
+    def initialize_server(self):
+        """
+        Start and setup webserver
+        """
+
+        if not GlobalConfig.web_server:
+            return
+
+        def on_server_msg(msg: str) -> None:
+            msg = msg.upper()
+            print(msg)
+            if msg == 'START':
+                self.timer.start()
+
+        ServerController.on_update = on_server_msg
+        run_server()
+
+    def kill_app(self, e: Exception) -> bool:
+        """
+        Kill the app and close other threads, etc.
+        """
+        print(e)
+        self.timer.kill = True
+        self.alive = False
+        stop_server()
+        return False
 
 
 if __name__ == "__main__":
