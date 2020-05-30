@@ -2,8 +2,7 @@ import socket
 import threading
 from globalconfig import GlobalConfig
 
-host = socket.gethostbyname(socket.gethostname())
-
+host = ''
 
 def default_on_update(msg: str) -> None:
     ServerController.last_message = msg
