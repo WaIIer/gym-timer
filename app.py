@@ -132,20 +132,21 @@ class app(tk.Tk):
         Put items into the window
         """
         self.frame.pack()
-        self.frame.config(padx=10, pady=10, bg=GlobalConfig.background)
+        self.frame.config(padx=GlobalConfig.xpadding, pady=GlobalConfig.ypadding, bg=GlobalConfig.background)
 
         self.clock_label.config(
             font=(GlobalConfig.digit_font, GlobalConfig.digit_size),
             bg=GlobalConfig.background,
             fg=GlobalConfig.digit_color,
         )
-        self.clock_label.grid(row=self.digit_row, column=0)
+        self.clock_label.grid(row=self.digit_row, column=0, pady=20)
 
         self.info_label.grid(row=self.info_row)
         self.info_label.config(
             font=(GlobalConfig.text_font, GlobalConfig.text_size),
             bg=GlobalConfig.background,
-            fg=GlobalConfig.text_color)
+            fg=GlobalConfig.text_color,
+            pady=20)
         self.info_stringvar.set('Waiting...')
 
     def initialize_ui(self) -> None:

@@ -2,6 +2,8 @@ import sys
 
 
 class GlobalConfig:
+    ypadding = 10
+    xpadding = 10
     fullscreen: bool = False
     digit_font: str = 'DSEG7 Modern-Regular'
     text_font: str = None
@@ -24,4 +26,5 @@ if sys.platform == "linux":
     GlobalConfig.digit_font = 'DSEG7 Modern'
     GlobalConfig.fullscreen = True
     GlobalConfig.digit_size = 300
-    clock_ms_digits: int = 0  # set to 0 to disable ms
+    GlobalConfig.clock_ms_digits: int = 0  # set to 0 to disable ms
+    GlobalConfig.ypadding = 200
