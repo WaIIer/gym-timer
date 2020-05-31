@@ -170,11 +170,14 @@ class app(tk.Tk):
                 mseconds = '0'
             self.last_time_update = TimeUpdate(hours, minutes, seconds, mseconds)
             self.update_clock()
-        except:
+        except Exception:
             print(delta)
 
     def update_clock(self) -> None:
         self.clock_stringvar.set(str(self.last_time_update))
+
+    def zero_clock(self) -> None:
+        self.clock_stringvar.set(str(TimeUpdate(0, 0, 0, 0)))
 
     def update(self):
         """
@@ -338,6 +341,7 @@ class app(tk.Tk):
             self.timer.kill = True
             self.timer.join()
             self.timer = None
+            self.zero_clock()
 
     def restart_timer(self) -> None:
         if self.timer:
