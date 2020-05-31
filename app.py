@@ -177,7 +177,7 @@ class app(tk.Tk):
         self.clock_stringvar.set(str(self.last_time_update))
 
     def zero_clock(self) -> None:
-        self.clock_stringvar.set(str(TimeUpdate(0, 0, 0, 0)))
+        self.clock_stringvar.set(str(TimeUpdate('00', '00', '00', '0'*GlobalConfig.clock_ms_digits)))
 
     def update(self):
         """
