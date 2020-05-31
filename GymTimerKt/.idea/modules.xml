@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/GymTimerKt.iml" filepath="$PROJECT_DIR$/.idea/GymTimerKt.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/GymTimerKt.main.iml" filepath="$PROJECT_DIR$/.idea/modules/GymTimerKt.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/GymTimerKt.test.iml" filepath="$PROJECT_DIR$/.idea/modules/GymTimerKt.test.iml" />
+    </modules>
+  </component>
+</project>

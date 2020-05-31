@@ -11,7 +11,7 @@ class GlobalConfig:
     digit_color: str = 'red2'
     digit_size: int = 100
     text_size: int = 30
-    text_color: str = 'snow'
+    text_color: str = 'white'
     clock_hour: bool = False
     clock_ms_digits: int = 1  # set to 0 to disable ms
     web_server: bool = True
@@ -19,6 +19,11 @@ class GlobalConfig:
     message_bits: int = 64
     encoding: str = 'ascii'
     output_timer: bool = False
+
+    config_hover_border_color = 'white'
+    config_selected_bg_color = 'white'
+    config_selected_text_color = 'gray1'
+    config_col_width = 10
 
 
 # RPi specific config

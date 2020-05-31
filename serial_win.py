@@ -14,10 +14,10 @@ ser = serial.Serial('COM7', baudrate=115200, timeout=.5)
 
 char_to_command = {
     'P': 'STOP',
-    '=': 'START',
+    '=': 'RUN',
     'S': 'STOP',
-    'A': 'VOLUP',
-    'V': 'VOLDOWN',
+    'A': 'CONFIG',
+    'V': 'RESTART',
     '0': '0',
     '1': '1',
     '2': '2',
