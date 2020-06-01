@@ -1,4 +1,5 @@
 import sys
+import tkinter as tk
 
 
 class GlobalConfig:
@@ -22,7 +23,7 @@ class GlobalConfig:
 
     config_hover_border_color = 'white'
     config_selected_bg_color = 'white'
-    config_selected_text_color = 'gray1'
+    config_selected_text_color = 'black'
     config_col_width = 10
 
     countdown_time = 3
