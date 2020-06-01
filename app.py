@@ -9,59 +9,10 @@ from datetime import timedelta
 from webserver import ServerController, run_server, stop_server
 from globalconfig import GlobalConfig
 from enum import Enum
-from lib import int_list_to_int
+from lib import int_list_to_int, AppState, TimeUpdate
 import inspect
-
-
-class AppState(Enum):
-    INIT = 0
-    RUNNING = 1
-    CONFIG = 2
-    PAUSED = 3
-    WAITING = 4
-
-
-class TimeUpdate:
-    def __init__(self, hour=-1, min=-1, sec=-1, ms=-1):
-        self.hour = hour
-        self.min = min
-        self.sec = sec
-        self.ms = ms
-
-    def get_time_delta(self) -> timedelta:
-        return timedelta(hours=int(self.hour),
-                         minutes=int(self.min),
-                         seconds=int(self.sec),
-                         milliseconds=int(self.ms))
-
-    def update_last_update(self, previous) -> bool:
-        changed = False
-
-        if self.hour != -1 and previous.hour != self.hour:
-            previous.hour = self.hour
-            changed = True
-        if self.min != -1 and previous.min != self.min:
-            previous.min = self.min
-            changed = True
-        if self.sec != -1 and previous.sec != self.sec:
-            previous.sec = self.sec
-            changed = True
-        if self.ms != -1 and previous.ms != self.ms:
-            previous.ms = self.ms
-            changed = True
-        return changed
-
-    def contains_placeholder(self) -> bool:
-        return self.ms == -1 or self.sec == -1 or self.min == -1 or self.hour == -1
-
-    def __str__(self):
-        ret = ''
-        if GlobalConfig.clock_hour:
-            ret += f'{self.hour}:'
-        ret += f'{self.min}:{self.sec}'
-        if GlobalConfig.clock_ms_digits > 0:
-            ret += f'.{self.ms}'
-        return ret
+from configui import ConfigUi, DrirectionEnum, ClockConfig, ClockModes
+import traceback
 
 
 class app(tk.Tk):
@@ -91,10 +42,14 @@ class app(tk.Tk):
         self.td_ms = 0
         self.last_time_delta = timedelta()
         self.timer_length = timedelta()
+        self.job_queue = []
+        self.timer_queue = []
         self.state_cycles = {
             AppState.INIT: 0,
             AppState.RUNNING: 0,
             AppState.CONFIG: 0,
+            AppState.ADVANCEDCONFIG: 0,
+            AppState.ADVANCEDTIMER: 0,
             AppState.PAUSED: 0,
             AppState.WAITING: 0,
         }
@@ -111,6 +66,8 @@ class app(tk.Tk):
         Apply configuration from glboalconfig.py
         """
         self.attributes("-fullscreen", GlobalConfig.fullscreen)
+        if not GlobalConfig.fullscreen:
+            self.geometry("1366x768")
 
     def initialize_ui_elements(self) -> None:
         """
@@ -155,6 +112,10 @@ class app(tk.Tk):
         """
         self.clock_stringvar.set('00:00.0')
 
+    def transition(self, other: AppState) -> None:
+        self.state = other
+        self.reset_cycle_conters()
+
     def set_clock(self, delta: timedelta) -> None:
         """
         Set the value of the clock based on the supplied timdelta
@@ -180,40 +141,36 @@ class app(tk.Tk):
     def zero_clock(self) -> None:
         self.clock_stringvar.set(str(TimeUpdate('00', '00', '00', '0'*GlobalConfig.clock_ms_digits)))
 
-    def update(self):
-        """
-        Used to run application
-        call tk's update
-        """
-
-        try:
-            super().update()
-            self.app_update()
-            return True
-        except Exception as e:
-            # On exception close app
-            return self.kill_app(e)
-
     def init_config(self) -> None:
         self.set_clock(timedelta(seconds=0.0))
-        self.reset_cycle_conters()
 
         def set_time(msg: str) -> None:
+            msg = msg.upper()
             if ((not msg) or msg == 'START') and self.td_seconds > 0:
                 while len(self.config_digits) < self.config_max_digits:
                     self.config_digits.insert(0, 0)
                 return
-            try:
-                digit = int(msg[0])
-            except Exception:
-                return
-            self.config_digits.append(digit)
+            elif msg.isdigit():
+                self.config_digits.append(int(msg))
+            elif msg == 'CONFIG':
+                self.job_queue.append(self.show_advancedconfig_ui)
 
         self.info_stringvar.set(Strings.config)
         self.config_max_digits = 6 if GlobalConfig.clock_hour else 4
         self.config_current_digit = 0
         self.config_digits = []
         ServerController.on_update = set_time
+
+    def show_advancedconfig_ui(self) -> None:
+        self.frame.pack_forget()
+        self.advancedconfig_ui = ConfigUi(self, onconfirm=self.on_advancedconfig_confirm)
+        self.advancedconfig_ui.pack()
+        self.transition(AppState.ADVANCEDCONFIG)
+
+    def hide_advancedconfig_ui(self) -> None:
+        self.advancedconfig_ui.pack_forget()
+        self.frame.pack()
+        self.advancedconfig_ui = None
 
     def run_config(self) -> None:
         if self.config_current_digit == len(self.config_digits):
@@ -222,17 +179,65 @@ class app(tk.Tk):
         self.config_current_digit = len(self.config_digits)
         if self.config_current_digit == self.config_max_digits:
             self.timer_length = self.last_time_delta
-            self.state = AppState.RUNNING
+            self.transition(AppState.RUNNING)
+
+    def init_advancedconfig(self) -> None:
+        self.advancedconfig_flash_time = int(time.monotonic())
+        ServerController.on_update = self.advancedconfig_ui.config_on_server_update
+
+    def run_advancedconfig(self) -> None:
+        if int(time.time()) != self.advancedconfig_flash_time:
+            self.advancedconfig_ui.flash_hovered()
+            self.advancedconfig_flash_time = int(time.time())
+        if self.advancedconfig_ui.queue:
+            [f() for f in self.advancedconfig_ui.queue]
+            self.advancedconfig_ui.queue = []
+
+    def init_advancedtimer(self) -> None:
+        self.hide_advancedconfig_ui()
+        self.timer_queue = ClockConfig.generate_timers()
+        if GlobalConfig.countdown_time > 0:
+            countdown_timer = Timer(timedelta(seconds=GlobalConfig.countdown_time),
+                                    name=ClockConfig.preview())
+            self.timer_queue.insert(0, countdown_timer)
+        self.timer: Timer = None
+
+        def advancedtimer_on_server_update(msg: str) -> None:
+            msg = msg.upper()
+            if msg == 'STOP':
+                pass
+            if msg == 'PAUSE':
+                pass
+            if msg == 'RESTART':
+                self.job_queue.append(lambda: self.timer.restart())
+
+        ServerController.on_update = advancedtimer_on_server_update
+
+    def run_advanedtimer(self) -> None:
+        if not self.timer:
+            if not self.timer_queue:
+                self.transition(AppState.CONFIG)
+                return
+            self.timer = self.timer_queue.pop(0)
+            self.info_stringvar.set(self.timer.name)
+            self.timer.start()
+        if not self.timer.finished:
+            self.set_clock(self.timer.time_remaining)
+        else:
+            self.kill_timer(self.timer)
+            self.timer = None
+
+    def on_advancedconfig_confirm(self) -> None:
+        self.transition(AppState.ADVANCEDTIMER)
 
     def init_running(self) -> None:
-        self.reset_cycle_conters()
         self.info_stringvar.set(Strings.running)
 
         def running_server_update(msg: str) -> None:
             msg = msg.upper()
             if msg == 'PAUSE':
                 self.timer.pause()
-                self.state = AppState.PAUSED
+                self.transition(AppState.PAUSED)
             if msg == 'STOP':
                 self
             if msg == 'RESTART':
@@ -246,38 +251,37 @@ class app(tk.Tk):
     def run_running(self) -> None:
         self.set_clock(self.timer.time_remaining)
         if self.timer.finished:
-            self.kill_timer()
-            self.state = AppState.WAITING
+            self.kill_timer(self.timer)
+            self.transition(AppState.WAITING)
 
     def init_waiting(self) -> None:
         self.info_stringvar.set(Strings.waiting)
-        self.reset_cycle_conters()
 
         def waiting_server_update(msg: str) -> None:
             msg = msg.upper()
             if msg == 'RESTART':
                 self.restart_timer()
             elif msg == 'CONFIG':
-                self.state = AppState.CONFIG
+                self.transition(AppState.CONFIG)
 
         ServerController.on_update = waiting_server_update
         self.state_cycles[AppState.WAITING] = 1
 
     def init_paused(self) -> None:
         self.info_stringvar.set(Strings.paused)
-        self.reset_cycle_conters()
+
         self.set_clock(self.timer.time_remaining)
 
         def paused_on_server_update(msg: str) -> None:
             msg = msg.upper()
             if msg == 'RESUME' or msg == 'RUN':
-                self.state = AppState.RUNNING
+                self.transition(AppState.RUNNING)
                 print('resuming')
                 self.timer.resume()
             elif msg == 'RESTART':
                 self.restart_timer()
             elif msg == 'CONFIG':
-                self.state = AppState.CONFIG
+                self.transition(AppState.CONFIG)
 
         ServerController.on_update = paused_on_server_update
 
@@ -304,8 +308,7 @@ class app(tk.Tk):
         Kill the app and close other threads, etc.
         """
         print(e)
-        if self.timer:
-            self.timer.kill = True
+        self.kill_timer(self.timer)
         self.alive = False
         stop_server()
         return False
@@ -335,27 +338,27 @@ class app(tk.Tk):
 
     def reset_cycle_conters(self) -> None:
         for key in self.state_cycles:
-            self.state_cycles[key] = 0
+            self.state_cycles[key] = -1
 
-    def kill_timer(self) -> None:
-        if self.timer:
-            self.timer.kill = True
-            self.timer.join()
-            self.timer = None
+    def kill_timer(self, timer: Timer) -> None:
+        if timer:
+            timer.kill = True
+            timer.join()
+            timer = None
             self.zero_clock()
 
     def restart_timer(self) -> None:
         if self.timer:
             self.timer.restart()
-            self.state = AppState.PAUSED
+            self.transition(AppState.PAUSED)
         else:
             self.timer = Timer(self.timer_length)
             self.timer.start()
-            self.state = AppState.RUNNING
+            self.transition(AppState.RUNNING)
 
     def increment_cycles(self, state: AppState) -> None:
         try:
-            self.state_cycles[state] = (self.state_cycles[state] % 1000000) + 1
+            self.state_cycles[state] += 1
         except Exception:
             return
 
@@ -369,13 +372,21 @@ class app(tk.Tk):
                 self.init_config()
             else:
                 self.run_config()
-            self.increment_cycles(AppState.CONFIG)
         elif self.state == AppState.RUNNING:
             if self.state_cycles[AppState.RUNNING] == 0:
                 self.init_running()
             else:
                 self.run_running()
-            self.increment_cycles(AppState.RUNNING)
+        elif self.state == AppState.ADVANCEDCONFIG:
+            if self.state_cycles[AppState.ADVANCEDCONFIG] == 0:
+                self.init_advancedconfig()
+            else:
+                self.run_advancedconfig()
+        elif self.state == AppState.ADVANCEDTIMER:
+            if self.state_cycles[AppState.ADVANCEDTIMER] == 0:
+                self.init_advancedtimer()
+            else:
+                self.run_advanedtimer()
         elif self.state == AppState.WAITING:
             if self.state_cycles[AppState.WAITING] == 0:
                 self.init_waiting()
@@ -386,9 +397,28 @@ class app(tk.Tk):
                 self.init_paused()
             else:
                 self.run_paused()
-            self.increment_cycles(AppState.PAUSED)
         else:
             pass
+
+        if self.job_queue:
+            [f() for f in self.job_queue]
+            self.job_queue = []
+
+        self.increment_cycles(self.state)
+
+    def update(self):
+        """
+        Used to run application
+        call tk's update
+        """
+
+        try:
+            super().update()
+            self.app_update()
+            return True
+        except Exception as e:
+            # On exception close app
+            return self.kill_app(e)
 
 
 if __name__ == "__main__":

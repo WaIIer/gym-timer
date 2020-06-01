@@ -11,6 +11,13 @@ class Strings:
     running = "Running"
     waiting = "Waiting"
     paused = "Paused"
+    countdown = "Starting..."
+
+    @staticmethod
+    def round_x(x: int):
+        return f'Round {x}'
+
+    rest = "Rest"
 
     config_mode = "Mode:"
     config_amrap = "AMRAP"
@@ -23,3 +30,4 @@ class Strings:
     config_rest = "Rest:"
     config_down = "🡇"
     config_preview = "Preview:"
+    config_confirm = "Confirm"

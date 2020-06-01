@@ -11,71 +11,21 @@ from globalconfig import GlobalConfig
 from enum import Enum
 from lib import int_list_to_int
 import inspect
-
-
-class DrirectionEnum(Enum):
-    UP = -1
-    DOWN = 1
-    LEFT = 2
-    RIGHT = 3
-
-
-class ClockModes(Enum):
-    AMRAP = 0
-    EMOM = 1
-    TIMER = 2
-    STOPWATCH = 3
-
-
-class ClockConfig:
-    mode = ClockModes.AMRAP
-    direction = 'DOWN'
-    seconds = [0]
-    rest = [0]
-    rounds = 1
-
-    @staticmethod
-    def set_timer_length(seconds: int, round: int = 0):
-        if ClockConfig.mode == ClockModes.AMRAP:
-            ClockConfig.seconds = [seconds]
-
-    @staticmethod
-    def set_rest_length(seconds: int, round: int = 0):
-        if ClockConfig.mode == ClockModes.AMRAP:
-            ClockConfig.rest = [seconds]
-
-    @staticmethod
-    def preview() -> str:
-        rounds_str = 'rounds' if ClockConfig.rounds > 1 else 'round'
-        if ClockConfig.mode == ClockModes.AMRAP:
-            ret = f'{ClockConfig.rounds} {rounds_str} of {ClockConfig.length_str(ClockConfig.seconds[0])}'
-            if ClockConfig.rest[0] > 0:
-                ret += f'with {ClockConfig.length_str(ClockConfig.rest[0])} between rounds'
-            return ret
-        return ''
-
-    @staticmethod
-    def length_str(seconds: int) -> str:
-        if seconds < 60:
-            return f'{seconds} seconds'
-        elif seconds < 3600:
-            mins, secs = divmod(seconds, 60)
-            return f'{mins}:{str(secs).zfill(2)}'
-        mins, secs = divmod(seconds, 60)
-        hours, mins = divmod(mins, 60)
-        return f'{hours}:{str(mins).zfill(2)}:{str(secs).zfill(2)}'
+from timer import Timer
 
 
 class ConfigUi(tk.Frame):
 
-    def __init__(self, master: tk.Tk):
+    def __init__(self, master: tk.Tk, onconfirm=lambda: None):
         self.count = 0
         super(ConfigUi, self).__init__(master)
+
+        self.onconfirm = onconfirm
         self.config(
             bg=GlobalConfig.background,
             pady=10
         )
-        self.pack(fill=tk.BOTH)
+        self.pack(fill=tk.X)
 
         self.queue = []
 
@@ -89,21 +39,22 @@ class ConfigUi(tk.Frame):
         self.add_option(OptionLabel(self, Strings.config_stopwatch), 0)
 
         self.hovered: OptionLabel = self.labels[0][1]
-        self.hovred_pos = (1, 0)
+        self.hovered_pos = (1, 0)
         self.hovered.hover()
 
-        ServerController.on_update = self.config_on_server_update
-
-    def add_option(self, option_label, row):
+    def add_option(self, option_label, row, colspan=1):
         while len(self.labels) <= row:
             self.labels.append([])
         self.labels[row].append(option_label)
         col = len(self.labels[row]) - 1
-        option_label.grid(row=row, column=col)
+        option_label.grid(row=row, column=col, columnspan=colspan)
         if col != 0 and option_label.selectable:
             self.grid_options.append((col, row))
         elif col == 0:
             option_label.config(anchor=tk.W)
+
+        for col, _ in enumerate(self.labels[0]):
+            self.columnconfigure(col, minsize=250)
 
     def flash_hovered(self):
         for row in self.labels:
@@ -129,7 +80,9 @@ class ConfigUi(tk.Frame):
         self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 1)
 
         self.add_option(OptionLabel(self, Strings.config_rounds, selectable=False), 2)
-        self.add_option(NumberInputLabel(self, 2, onnumberinput=self.on_rounds_digit), 2)  # round input
+        round_input = NumberInputLabel(self, 2, onnumberinput=self.on_rounds_digit, placeholder='01')
+        round_input.insert_digit('1', overwrite=True)
+        self.add_option(round_input, 2)  # round input
         self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 2)
 
         self.add_option(OptionLabel(self, Strings.config_rest, selectable=False), 3)
@@ -137,21 +90,27 @@ class ConfigUi(tk.Frame):
         self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 3)
 
         self.add_option(OptionLabel(self, Strings.config_preview, selectable=False), 4)
-        self.add_option(self.preview_label, 4)
+        self.add_option(self.preview_label, 4, colspan=4)
+
+        self.add_option(OptionLabel(self, '', selectable=False), 5)
+        self.add_option(ConfirmButton(self, clickable=True, onselected=self.onconfirm), 5)
 
         self.hover(1, 1)
 
-    def move(self, direction: DrirectionEnum) -> bool:
-        x, y = self.hovred_pos
+    def move(self, direction: Enum) -> bool:
+        x, y = self.hovered_pos
         if direction == DrirectionEnum.UP or direction == DrirectionEnum.DOWN:
             y += direction.value
-            if x < 0 or x > len(self.labels):
-                return False
-            while x >= 1:
-                if (x, y) in self.grid_options:
-                    self.hover(x, y)
-                    return True
-                x -= 1
+            while y >= 0 and y <= len(self.labels[0]):
+                if x < 0 or x > len(self.labels):
+                    return False
+                while x >= 1:
+                    if (x, y) in self.grid_options:
+                        self.hover(x, y)
+                        return True
+                    x -= 1
+                x, _ = self.hovered_pos
+                y += direction.value
             return False
         if direction == DrirectionEnum.RIGHT:
             x += 1
@@ -163,7 +122,7 @@ class ConfigUi(tk.Frame):
         return False
 
     def hover(self, x, y):
-        self.hovred_pos = (x, y)
+        self.hovered_pos = (x, y)
         self.hovered.unhover()
         self.hovered = self.labels[y][x]
         self.hovered.hover()
@@ -203,7 +162,7 @@ class ConfigUi(tk.Frame):
 
 class OptionLabel(tk.Label):
 
-    def __init__(self, master: tk.Frame, text: str, selectable: bool = True, onselected=None):
+    def __init__(self, master: ConfigUi, text: str, selectable: bool = True, onselected=None):
         super(OptionLabel, self).__init__(master)
         self.selected = False
         self.hovered = False
@@ -218,7 +177,7 @@ class OptionLabel(tk.Label):
             anchor=tk.CENTER,
             pady=5,
             padx=3,
-            width=GlobalConfig.config_col_width,
+            # width=GlobalConfig.config_col_width,
             textvariable=self.string_var,
         )
         self._config()
@@ -236,6 +195,8 @@ class OptionLabel(tk.Label):
         )
 
     def select(self):
+        if not self.selectable:
+            return
         if not self.selected:
             self.selected = True
             self.config(
@@ -264,11 +225,23 @@ class OptionLabel(tk.Label):
         self.config(fg=GlobalConfig.background)
 
 
+class ConfirmButton(OptionLabel):
+    def __init__(self, master: ConfigUi, clickable: bool, onselected=lambda: None):
+        super().__init__(master, Strings.config_confirm, selectable=True, onselected=onselected)
+        self.clickable = clickable
+        self.master = master
+
+    def selected(self):
+        self.on_selected()
+
+
 class WideLabel(OptionLabel):
     def __init__(self, master, text, width_cols: int, selectable=True, onselected=None):
         super().__init__(master, text, selectable=selectable, onselected=onselected)
         self.config(
-            width=width_cols*GlobalConfig.config_col_width,
+            justify=tk.LEFT,
+            anchor=tk.E,
+            font=(GlobalConfig.text_font, 30)
         )
 
 
@@ -299,9 +272,11 @@ class TimeInputLabel(OptionLabel):
 
 
 class NumberInputLabel(OptionLabel):
-    def __init__(self, master, digits: int = 2, onnumberinput=lambda num: None):
-        super(NumberInputLabel, self).__init__(master, '0'*digits)
-        self.string_var.set(value='0'*digits)
+    def __init__(self, master, digits: int = 2, onnumberinput=lambda num: None, placeholder: str = None):
+        self.placeholder = placeholder if placeholder else '0'*digits
+        super(NumberInputLabel, self).__init__(master, self.placeholder)
+        self.overwrite = False
+        self.string_var.set(value=self.placeholder)
         self.normal_color = GlobalConfig.digit_color
         self.digits = ['0' for i in range(digits)]
         self.config(
@@ -310,11 +285,15 @@ class NumberInputLabel(OptionLabel):
         self.number_input = True
         self.onnumberinput = onnumberinput
 
-    def insert_digit(self, digit: str):
-        self.digits = [self.digits[1]]
-        self.digits.append(digit)
+    def insert_digit(self, digit: str, overwrite: bool = False):
+        if not self.overwrite:
+            self.digits = [self.digits[1]]
+            self.digits.append(digit)
+        else:
+            self.digits = ['0', digit]
         self.string_var.set(''.join(self.digits))
         self.onnumberinput(int(self.string_var.get()))
+        self.overwrite = overwrite
 
 
 class DemoWindow(tk.Tk):
@@ -322,6 +301,7 @@ class DemoWindow(tk.Tk):
     def __init__(self):
         super(DemoWindow, self).__init__()
         self.config(bg=GlobalConfig.background)
+        self.geometry("1366x768")
         self.config_ui = ConfigUi(self)
         self.start_time = time.time()
         run_server()
@@ -354,6 +334,74 @@ class DemoWindow(tk.Tk):
             print(msg)
 
         run_server()
+
+
+class DrirectionEnum(Enum):
+    UP = -1
+    DOWN = 1
+    LEFT = 2
+    RIGHT = 3
+
+
+class ClockModes(Enum):
+    AMRAP = 0
+    EMOM = 1
+    TIMER = 2
+    STOPWATCH = 3
+
+
+class ClockConfig:
+    mode = ClockModes.AMRAP
+    direction = 'DOWN'
+    seconds = [0]
+    rest = [0]
+    rounds = 1
+
+    @staticmethod
+    def generate_timers():
+        timer_queue = []
+        if ClockConfig.mode == ClockModes.AMRAP:
+            for round in range(ClockConfig.rounds - 1):
+                timer_queue.append(Timer(timedelta(seconds=ClockConfig.seconds[0]),
+                                         name=Strings.round_x(round+1)))
+                if ClockConfig.rest[0] == 0:
+                    continue
+                timer_queue.append(Timer(timedelta(seconds=ClockConfig.rest[0]),
+                                         name=Strings.rest))
+            timer_queue.append(Timer(timedelta(seconds=ClockConfig.seconds[0]),
+                                     name=Strings.round_x(ClockConfig.rounds+1)))
+        return timer_queue
+
+    @staticmethod
+    def set_timer_length(seconds: int, round: int = 0):
+        if ClockConfig.mode == ClockModes.AMRAP:
+            ClockConfig.seconds = [seconds]
+
+    @staticmethod
+    def set_rest_length(seconds: int, round: int = 0):
+        if ClockConfig.mode == ClockModes.AMRAP:
+            ClockConfig.rest = [seconds]
+
+    @staticmethod
+    def preview() -> str:
+        rounds_str = 'rounds' if ClockConfig.rounds > 1 else 'round'
+        if ClockConfig.mode == ClockModes.AMRAP:
+            ret = f'{ClockConfig.rounds} {rounds_str} of {ClockConfig.length_str(ClockConfig.seconds[0])}'
+            if ClockConfig.rest[0] > 0:
+                ret += f' with {ClockConfig.length_str(ClockConfig.rest[0])} between rounds'
+            return ret
+        return ''
+
+    @staticmethod
+    def length_str(seconds: int) -> str:
+        if seconds < 60:
+            return f'{seconds} seconds'
+        elif seconds < 3600:
+            mins, secs = divmod(seconds, 60)
+            return f'{mins}:{str(secs).zfill(2)}'
+        mins, secs = divmod(seconds, 60)
+        hours, mins = divmod(mins, 60)
+        return f'{hours}:{str(mins).zfill(2)}:{str(secs).zfill(2)}'
 
 
 if __name__ == '__main__':

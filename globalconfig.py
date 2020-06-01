@@ -25,6 +25,8 @@ class GlobalConfig:
     config_selected_text_color = 'gray1'
     config_col_width = 10
 
+    countdown_time = 3
+
 
 # RPi specific config
 if sys.platform == "linux":

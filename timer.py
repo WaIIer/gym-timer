@@ -17,7 +17,9 @@ class Timer:
         timer_length: timedelta,
         print_prefix: str = "",
         tk_string_var: StringVar = None,
+        name: str = ''
     ):
+        self.name = name
         self.clock = 0
         self.kill = False
         # backup to allow restarting timer
