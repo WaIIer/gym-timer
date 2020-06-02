@@ -4,6 +4,7 @@ from tkinter import StringVar
 from strings_en import Strings
 from copy import deepcopy
 from globalconfig import GlobalConfig
+from playsound import playsound
 import time
 
 
@@ -13,12 +14,11 @@ def timedelta_str(td: timedelta):
 
 class Timer:
     def __init__(
-        self,
-        timer_length: timedelta,
-        print_prefix: str = "",
-        tk_string_var: StringVar = None,
-        name: str = ''
-    ):
+            self,
+            timer_length: timedelta,
+            print_prefix: str = "",
+            tk_string_var: StringVar = None,
+            name: str = ''):
         self.name = name
         self.clock = 0
         self.kill = False
@@ -47,6 +47,10 @@ class Timer:
         self.kill = False
         self.start()
 
+    def beep(self) -> None:
+        if GlobalConfig.beep:
+            playsound(GlobalConfig.beep_file, block=False)
+
     def output_timer(self) -> None:
         if self.string_var is not None:
             self.string_var.set(
@@ -68,6 +72,7 @@ class Timer:
                     self.reset_output()
                     self.running = False
                     self.finished = True
+                    self.beep()
                     return
                 current = time.monotonic()
                 delta = current - last_tick
@@ -95,6 +100,40 @@ class Timer:
         self.timer_thread.join()
 
 
+class CountdownTimer(Timer):
+    def __init__(self, tk_string_var: StringVar = None):
+        super().__init__(timedelta(seconds=GlobalConfig.countdown_length),
+                         tk_string_var=tk_string_var,
+                         name=Strings.countdown)
+        self.last_beep: float = None
+
+    def start(self) -> None:
+        # Fork a process to start the timer
+        def __run_timer(self) -> None:
+            last_tick = time.monotonic()
+            # self.beep(last_tick)
+            self.running = True
+            while not self.kill:
+                current = time.monotonic()
+                if self.time_remaining.total_seconds() <= 0:
+                    self.reset_output()
+                    self.running = False
+                    self.finished = True
+                    self.beep()
+                    return
+                delta = current - last_tick
+                new_time_remaining = self.time_remaining - timedelta(seconds=delta)
+                if new_time_remaining.seconds != self.time_remaining.seconds:
+                    self.beep()
+                self.time_remaining = new_time_remaining
+                last_tick = current
+                if GlobalConfig.output_timer:
+                    self.output_timer()
+            self.running = False
+        self.timer_thread = Thread(target=__run_timer, args=(self,))
+        self.timer_thread.start()
+
+
 class EmomTimer(Timer):
     def __init__(self, rounds: int, round_lengths: [timedelta]):
         self.timers = []
@@ -116,11 +155,6 @@ class EmomTimer(Timer):
 
 
 if __name__ == '__main__':
-    t = Timer(timedelta(seconds=10))
+    t = countdown_timer()
     t.start()
-    time.sleep(1)
-    t.pause()
-    time.sleep(1)
-    t.resume()
-    input()
     t.join()

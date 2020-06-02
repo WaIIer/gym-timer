@@ -20,7 +20,9 @@ class GlobalConfig:
     message_bits: int = 64
     encoding: str = 'ascii'
     output_timer: bool = False
-
+    beep: bool = True
+    countdown_length: int = 3
+    beep_file: str = 'ping1.wav'
     config_hover_border_color = 'white'
     config_selected_bg_color = 'white'
     config_selected_text_color = 'black'

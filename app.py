@@ -1,5 +1,5 @@
 from strings_en import Strings
-from timer import Timer, EmomTimer
+from timer import Timer, EmomTimer, CountdownTimer
 import tkinter as tk
 from tkinter import StringVar
 import threading
@@ -196,10 +196,7 @@ class app(tk.Tk):
     def init_advancedtimer(self) -> None:
         self.hide_advancedconfig_ui()
         self.timer_queue = ClockConfig.generate_timers()
-        if GlobalConfig.countdown_time > 0:
-            countdown_timer = Timer(timedelta(seconds=GlobalConfig.countdown_time),
-                                    name=ClockConfig.preview())
-            self.timer_queue.insert(0, countdown_timer)
+        self.timer_queue.insert(0, CountdownTimer())
         self.timer: Timer = None
 
         def advancedtimer_on_server_update(msg: str) -> None:

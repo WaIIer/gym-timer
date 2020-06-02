@@ -34,7 +34,7 @@ class ConfigUi(tk.Frame):
         self.labels.append([])
         self.add_option(OptionLabel(self, Strings.config_mode), 0)
         self.add_option(OptionLabel(self, Strings.config_amrap, onselected=self.on_amrap_selected), 0)
-        self.add_option(OptionLabel(self, Strings.config_emom), 0)
+        self.add_option(OptionLabel(self, Strings.config_emom, onselected=self.on_emom_selected), 0)
         self.add_option(OptionLabel(self, Strings.config_timer), 0)
         self.add_option(OptionLabel(self, Strings.config_stopwatch), 0)
 
@@ -75,7 +75,7 @@ class ConfigUi(tk.Frame):
     def on_amrap_selected(self):
         self.type_selected()
         ClockConfig.mode = ClockModes.AMRAP
-        self.add_option(OptionLabel(self, Strings.config_length), 1)
+        self.add_option(OptionLabel(self, Strings.config_round_length), 1)
         self.add_option(TimeInputLabel(self, onnumberinput=self.on_time_digit), 1)  # round length
         self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 1)
 
@@ -91,6 +91,25 @@ class ConfigUi(tk.Frame):
 
         self.add_option(OptionLabel(self, Strings.config_preview, selectable=False), 4)
         self.add_option(self.preview_label, 4, colspan=4)
+
+        self.add_option(OptionLabel(self, '', selectable=False), 5)
+        self.add_option(ConfirmButton(self, clickable=True, onselected=self.onconfirm), 5)
+
+        self.hover(1, 1)
+
+    def on_emom_selected(self):
+        self.type_selected()
+        ClockConfig.mode = ClockModes.EMOM
+        self.add_option(OptionLabel(self, Strings.config_every), 1)
+        self.add_option(TimeInputLabel(self, onnumberinput=self.on_time_digit), 1)
+        self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 1)
+
+        self.add_option(OptionLabel(self, Strings.config_for), 2)
+        self.add_option(TimeInputLabel(self, self.on_emom_for_digit), 2)
+        self.add_option(OptionLabel(self, Strings.config_down, selectable=False), 2)
+
+        self.add_option(OptionLabel(self, Strings.config_preview), 3)
+        self.add_option(self.preview_label, 3, colspan=4)
 
         self.add_option(OptionLabel(self, '', selectable=False), 5)
         self.add_option(ConfirmButton(self, clickable=True, onselected=self.onconfirm), 5)
@@ -146,6 +165,14 @@ class ConfigUi(tk.Frame):
 
     def on_time_digit(self, seconds: int) -> None:
         ClockConfig.seconds = [seconds]
+        self.queue.append(lambda: self.preview_label.set_text(ClockConfig.preview()))
+        print(ClockConfig.preview())
+
+    def on_emom_for_digit(self, seconds: int) -> None:
+        round_length = ClockConfig.seconds[0]
+        if seconds < round_length:
+            return
+        ClockConfig.rounds, extra = divmod(seconds, round_length)
         self.queue.append(lambda: self.preview_label.set_text(ClockConfig.preview()))
         print(ClockConfig.preview())
 
@@ -356,6 +383,7 @@ class ClockConfig:
     seconds = [0]
     rest = [0]
     rounds = 1
+    round_length = [0]
 
     @staticmethod
     def generate_timers():
@@ -370,6 +398,10 @@ class ClockConfig:
                                          name=Strings.rest))
             timer_queue.append(Timer(timedelta(seconds=ClockConfig.seconds[0]),
                                      name=Strings.round_x(ClockConfig.rounds)))
+        elif ClockConfig.mode == ClockModes.EMOM:
+            for round in range(ClockConfig.rounds):
+                timer_queue.append(Timer(timedelta(seconds=ClockConfig.seconds[0]),
+                                         name=Strings.round_x(round+1)))
         return timer_queue
 
     @staticmethod
@@ -383,14 +415,21 @@ class ClockConfig:
             ClockConfig.rest = [seconds]
 
     @staticmethod
+    def total_seconds():
+        return ClockConfig.seconds[0] * ClockConfig.rounds
+
+    @staticmethod
     def preview() -> str:
+        if not ClockConfig.seconds or not ClockConfig.rounds:
+            return ''
         rounds_str = 'rounds' if ClockConfig.rounds > 1 else 'round'
+        ret = f'{ClockConfig.rounds} {rounds_str} of {ClockConfig.length_str(ClockConfig.seconds[0])}'
         if ClockConfig.mode == ClockModes.AMRAP:
-            ret = f'{ClockConfig.rounds} {rounds_str} of {ClockConfig.length_str(ClockConfig.seconds[0])}'
             if ClockConfig.rest[0] > 0:
                 ret += f' with {ClockConfig.length_str(ClockConfig.rest[0])} between rounds'
-            return ret
-        return ''
+        elif ClockConfig.mode == ClockModes.EMOM:
+            ret += f' For {str(timedelta(seconds=ClockConfig.total_seconds()))}'
+        return ret
 
     @staticmethod
     def length_str(seconds: int) -> str:
