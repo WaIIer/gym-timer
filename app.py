@@ -249,7 +249,7 @@ class app(tk.Tk):
         self.set_clock(self.timer.time_remaining)
         if self.timer.finished:
             self.kill_timer(self.timer)
-            self.transition(AppState.WAITING)
+            self.transition(AppState.CONFIG)
 
     def init_waiting(self) -> None:
         self.info_stringvar.set(Strings.waiting)
