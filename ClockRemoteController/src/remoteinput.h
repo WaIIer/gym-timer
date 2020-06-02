@@ -13,10 +13,16 @@ char process_remote_input(uint64_t input)
         return '=';
     case KEY_STOP:
         return 'S';
-    case KEY_VOL_UP:
+    case KEY_RESTART:
+        return 'R';
+    case KEY_UP:
         return 'A';
-    case KEY_VOL_DOWN:
+    case KEY_DOWN:
         return 'V';
+    case KEY_LEFT:
+        return 'L';
+    case KEY_RIGHT:
+        return 'W';
     case KEY_0:
         return '0';
     case KEY_1:

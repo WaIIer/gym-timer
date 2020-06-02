@@ -3,6 +3,7 @@ import sys
 import time
 import socket
 from globalconfig import GlobalConfig
+from webserver import MsgEnum
 
 if sys.argv[1] == 'pi':
     host = socket.gethostbyname('raspberrypi.local')
@@ -13,11 +14,14 @@ else:
 ser = serial.Serial('COM7', baudrate=115200, timeout=.5)
 
 char_to_command = {
-    'P': 'STOP',
-    '=': 'RUN',
-    'S': 'STOP',
-    'A': 'CONFIG',
-    'V': 'RESTART',
+    'P': MsgEnum.POWER.value,
+    '=': MsgEnum.PAUSE.value,
+    'S': MsgEnum.STOP.value,
+    'A': MsgEnum.UP.value,
+    'V': MsgEnum.DOWN.value,
+    'L': MsgEnum.LEFT.value,
+    'W': MsgEnum.RIGHT.value,
+    'R': MsgEnum.RESTART.value,
     '0': '0',
     '1': '1',
     '2': '2',

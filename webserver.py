@@ -1,8 +1,25 @@
 import socket
 import threading
 from globalconfig import GlobalConfig
+from enum import Enum
 
 host = ''
+
+
+class MsgEnum(Enum):
+    START = 'PAUSE'
+    CONFIG = 'STOP'
+    PAUSE = 'PAUSE'
+    PLAY = 'PAUSE'
+    CONFIRM = 'PAUSE'
+    RESTART = 'RESTART'
+    STOP = 'STOP'
+    RESUME = 'RESUME'
+    UP = 'UP'
+    DOWN = 'DOWN'
+    RIGHT = 'RIGHT'
+    LEFT = 'LEFT'
+    POWER = 'POWER'
 
 
 def default_on_update(msg: str) -> None:

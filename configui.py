@@ -6,7 +6,7 @@ import threading
 import time
 import datetime
 from datetime import timedelta
-from webserver import ServerController, run_server, stop_server
+from webserver import ServerController, run_server, stop_server, MsgEnum
 from globalconfig import GlobalConfig
 from enum import Enum
 from lib import int_list_to_int
@@ -149,15 +149,15 @@ class ConfigUi(tk.Frame):
 
     def config_on_server_update(self, msg: str):
         msg = msg.upper()
-        if msg == 'UP':
+        if msg == MsgEnum.UP.value:
             self.move(DrirectionEnum.UP)
-        elif msg == 'DOWN':
+        elif msg == MsgEnum.DOWN.value:
             self.move(DrirectionEnum.DOWN)
-        elif msg == 'RIGHT':
+        elif msg == MsgEnum.RIGHT.value:
             self.move(DrirectionEnum.RIGHT)
-        elif msg == 'LEFT':
+        elif msg == MsgEnum.LEFT.value:
             self.move(DrirectionEnum.LEFT)
-        elif msg == 'STOP':
+        elif msg == MsgEnum.START.value:
             self.queue.append(self.select_hovered)
         elif msg.isdigit():
             if self.hovered.number_input:

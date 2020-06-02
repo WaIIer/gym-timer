@@ -6,7 +6,7 @@ import threading
 import time
 import datetime
 from datetime import timedelta
-from webserver import ServerController, run_server, stop_server
+from webserver import ServerController, run_server, stop_server, MsgEnum
 from globalconfig import GlobalConfig
 from enum import Enum
 from lib import int_list_to_int, AppState, TimeUpdate
@@ -146,13 +146,13 @@ class app(tk.Tk):
 
         def set_time(msg: str) -> None:
             msg = msg.upper()
-            if ((not msg) or msg == 'START') and self.td_seconds > 0:
+            if (msg == MsgEnum.START.value) and self.last_time_delta.seconds > 0:
                 while len(self.config_digits) < self.config_max_digits:
                     self.config_digits.insert(0, 0)
                 return
             elif msg.isdigit():
                 self.config_digits.append(int(msg))
-            elif msg == 'CONFIG':
+            elif msg == MsgEnum.CONFIG.value:
                 self.job_queue.append(self.show_advancedconfig_ui)
 
         self.info_stringvar.set(Strings.config)
@@ -201,11 +201,11 @@ class app(tk.Tk):
 
         def advancedtimer_on_server_update(msg: str) -> None:
             msg = msg.upper()
-            if msg == 'STOP':
+            if msg == MsgEnum.STOP.value:
                 pass
-            if msg == 'PAUSE':
+            if msg == MsgEnum.PAUSE.value:
                 pass
-            if msg == 'RESTART':
+            if msg == MsgEnum.RESTART.value:
                 self.job_queue.append(lambda: self.timer.restart())
 
         ServerController.on_update = advancedtimer_on_server_update
@@ -232,12 +232,12 @@ class app(tk.Tk):
 
         def running_server_update(msg: str) -> None:
             msg = msg.upper()
-            if msg == 'PAUSE':
+            if msg == MsgEnum.PAUSE.value:
                 self.timer.pause()
                 self.transition(AppState.PAUSED)
-            if msg == 'STOP':
+            if msg == MsgEnum.STOP.value:
                 self
-            if msg == 'RESTART':
+            if msg == MsgEnum.RESTART.value:
                 self.restart_timer()
 
         ServerController.on_update = running_server_update
@@ -256,9 +256,9 @@ class app(tk.Tk):
 
         def waiting_server_update(msg: str) -> None:
             msg = msg.upper()
-            if msg == 'RESTART':
+            if msg == MsgEnum.RESTART.value:
                 self.restart_timer()
-            elif msg == 'CONFIG':
+            elif msg == MsgEnum.CONFIG.value:
                 self.transition(AppState.CONFIG)
 
         ServerController.on_update = waiting_server_update
@@ -271,13 +271,13 @@ class app(tk.Tk):
 
         def paused_on_server_update(msg: str) -> None:
             msg = msg.upper()
-            if msg == 'RESUME' or msg == 'RUN':
+            if msg == MsgEnum.PLAY.value:
                 self.transition(AppState.RUNNING)
                 print('resuming')
                 self.timer.resume()
-            elif msg == 'RESTART':
+            elif msg == MsgEnum.RESTART.value:
                 self.restart_timer()
-            elif msg == 'CONFIG':
+            elif msg == MsgEnum.CONFIG.value:
                 self.transition(AppState.CONFIG)
 
         ServerController.on_update = paused_on_server_update
