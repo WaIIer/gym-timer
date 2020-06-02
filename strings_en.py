@@ -28,6 +28,6 @@ class Strings:
     config_length = "Length:"
     config_time_zeros = "00:00"
     config_rest = "Rest:"
-    config_down = "🡇"
+    config_down = "\u21e9"
     config_preview = "Preview:"
     config_confirm = "Confirm"

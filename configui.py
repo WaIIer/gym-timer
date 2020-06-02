@@ -369,7 +369,7 @@ class ClockConfig:
                 timer_queue.append(Timer(timedelta(seconds=ClockConfig.rest[0]),
                                          name=Strings.rest))
             timer_queue.append(Timer(timedelta(seconds=ClockConfig.seconds[0]),
-                                     name=Strings.round_x(ClockConfig.rounds+1)))
+                                     name=Strings.round_x(ClockConfig.rounds)))
         return timer_queue
 
     @staticmethod
