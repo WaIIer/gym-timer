@@ -135,6 +135,20 @@ class app(tk.Tk):
         except Exception:
             print(delta)
 
+    def set_clock_preserved(self, hours: int = 0, minutes: int = 0, seconds: int = 0) -> None:
+        try:
+            self.last_time_delta = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+            hour_str = ''
+            if GlobalConfig.clock_hour:
+                hour_str = f'{str(hours).zfill(1)}:'
+            min_sec_str = f'{str(minutes).zfill(2)}:{str(seconds).zfill(2)}'
+            if GlobalConfig.clock_ms_digits > 0:
+                self.clock_stringvar.set(hour_str + min_sec_str + '.' + ('0' * GlobalConfig.clock_ms_digits))
+            else:
+                self.clock_stringvar.set(hour_str + min_sec_str)
+        except Exception:
+            return
+
     def update_clock(self) -> None:
         self.clock_stringvar.set(str(self.last_time_update))
 
@@ -144,7 +158,7 @@ class app(tk.Tk):
     def init_config(self) -> None:
         self.set_clock(timedelta(seconds=0.0))
 
-        def set_time(msg: str) -> None:
+        def config_on_server_update(msg: str) -> None:
             msg = msg.upper()
             if (msg == MsgEnum.START.value) and self.last_time_delta.seconds > 0:
                 while len(self.config_digits) < self.config_max_digits:
@@ -159,7 +173,7 @@ class app(tk.Tk):
         self.config_max_digits = 6 if GlobalConfig.clock_hour else 4
         self.config_current_digit = 0
         self.config_digits = []
-        ServerController.on_update = set_time
+        ServerController.on_update = config_on_server_update
 
     def show_advancedconfig_ui(self) -> None:
         self.frame.pack_forget()
@@ -321,17 +335,17 @@ class app(tk.Tk):
             return
         if len(num_list) <= 2:
             secs = int_list_to_int(num_list)
-            self.set_clock(timedelta(seconds=secs))
+            self.set_clock_preserved(seconds=secs)
         elif len(num_list) <= 4:
             secs = int_list_to_int(num_list[-2:])
             mins = int_list_to_int(num_list[:-2])
-            self.set_clock(timedelta(seconds=secs, minutes=mins))
+            self.set_clock_preserved(minutes=mins, seconds=secs)
         else:
             hrs = int_list_to_int(num_list[:-4])
             min_sec = num_list[-4:]
             secs = int_list_to_int(min_sec[-2:])
             mins = int_list_to_int(min_sec[:-2])
-            self.set_clock(timedelta(seconds=secs, minutes=mins, hours=hrs))
+            self.set_clock_preserved(seconds=secs, minutes=mins, hours=hrs)
 
     def reset_cycle_conters(self) -> None:
         for key in self.state_cycles:

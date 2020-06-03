@@ -283,6 +283,7 @@ class TimeInputLabel(OptionLabel):
             fg=self.normal_color)
         self.number_input = True
         self.onnumberinput = onnumberinput
+        self.input_str = ''
 
     def insert_digit(self, digit: str):
         self.digits = self.digits[0:3]
