@@ -5,6 +5,7 @@ from strings_en import Strings
 from copy import deepcopy
 from globalconfig import GlobalConfig
 from playsound import playsound
+import lib
 import time
 
 
@@ -48,8 +49,7 @@ class Timer:
         self.start()
 
     def beep(self) -> None:
-        if GlobalConfig.beep:
-            playsound(GlobalConfig.beep_file, block=False)
+        lib.beep()
 
     def output_timer(self) -> None:
         if self.string_var is not None:
@@ -69,17 +69,17 @@ class Timer:
             self.running = True
             while not self.kill:
                 if self.time_remaining.total_seconds() <= 0:
+                    self.beep()
                     self.reset_output()
                     self.running = False
                     self.finished = True
-                    self.beep()
                     return
                 current = time.monotonic()
                 delta = current - last_tick
                 self.time_remaining -= timedelta(seconds=delta)
                 last_tick = current
-                if GlobalConfig.output_timer:
-                    self.output_timer()
+                # if GlobalConfig.output_timer:
+                #     self.output_timer()
             self.running = False
 
         self.timer_thread = Thread(target=__run_timer, args=(self,))

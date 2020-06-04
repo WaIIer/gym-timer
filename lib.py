@@ -1,6 +1,7 @@
 from enum import Enum
 from datetime import timedelta
 from globalconfig import GlobalConfig
+import pygame
 
 
 def int_list_to_int(int_list: []) -> int:
@@ -15,6 +16,9 @@ class AppState(Enum):
     ADVANCEDTIMER = 4
     PAUSED = 5
     WAITING = 6
+    CLOCK = 7
+    HIDDEN = 8
+    INVALID = 9
 
 
 class TimeUpdate:
@@ -58,3 +62,15 @@ class TimeUpdate:
         if GlobalConfig.clock_ms_digits > 0:
             ret += f'.{self.ms}'
         return ret
+
+
+if GlobalConfig.beep:
+    pygame.init()
+    pygame.mixer.init()
+    pygame.mixer.music.load(GlobalConfig.beep_file)
+
+
+def beep():
+    if not GlobalConfig.beep:
+        return
+    pygame.mixer.music.play()

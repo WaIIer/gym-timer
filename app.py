@@ -29,7 +29,7 @@ class app(tk.Tk):
         self.initialize_ui()
         self.initialize_server()
 
-        self.state = AppState.CONFIG
+        self.state = AppState.CLOCK
 
     def initialize_variables(self) -> None:
         self.timer: Timer = None
@@ -42,17 +42,13 @@ class app(tk.Tk):
         self.td_ms = 0
         self.last_time_delta = timedelta()
         self.timer_length = timedelta()
+        self.current_clock_time: datetime.datetime = datetime.datetime.now()
+        self.config_current_digit: int = 0
+        self.config_digits = []
         self.job_queue = []
         self.timer_queue = []
-        self.state_cycles = {
-            AppState.INIT: 0,
-            AppState.RUNNING: 0,
-            AppState.CONFIG: 0,
-            AppState.ADVANCEDCONFIG: 0,
-            AppState.ADVANCEDTIMER: 0,
-            AppState.PAUSED: 0,
-            AppState.WAITING: 0,
-        }
+        self.last_state: AppState = AppState.INVALID
+        self.state_cycles = {state: 0 for state in AppState}
 
     def grid_setup(self) -> None:
         """
@@ -112,8 +108,10 @@ class app(tk.Tk):
         """
         self.clock_stringvar.set('00:00.0')
 
-    def transition(self, other: AppState) -> None:
+    def transition(self, other: AppState, transition_data: [] = None) -> None:
+        self.last_state = self.state
         self.state = other
+        self.transition_data = transition_data if transition_data else None
         self.reset_cycle_conters()
 
     def set_clock(self, delta: timedelta) -> None:
@@ -152,6 +150,9 @@ class app(tk.Tk):
     def update_clock(self) -> None:
         self.clock_stringvar.set(str(self.last_time_update))
 
+    def show_current_time(self) -> None:
+        self.clock_stringvar.set(self.current_clock_time.strftime("%H:%M:%S"))
+
     def zero_clock(self) -> None:
         self.clock_stringvar.set(str(TimeUpdate('00', '00', '00', '0'*GlobalConfig.clock_ms_digits)))
 
@@ -168,11 +169,13 @@ class app(tk.Tk):
                 self.config_digits.append(int(msg))
             elif msg == MsgEnum.CONFIG.value:
                 self.job_queue.append(self.show_advancedconfig_ui)
+            elif msg == MsgEnum.POWER.value:
+                self.transition(AppState.CLOCK)
 
         self.info_stringvar.set(Strings.config)
         self.config_max_digits = 6 if GlobalConfig.clock_hour else 4
         self.config_current_digit = 0
-        self.config_digits = []
+        self.config_digits = self.transition_data if self.transition_data else []
         ServerController.on_update = config_on_server_update
 
     def show_advancedconfig_ui(self) -> None:
@@ -182,9 +185,10 @@ class app(tk.Tk):
         self.transition(AppState.ADVANCEDCONFIG)
 
     def hide_advancedconfig_ui(self) -> None:
-        self.advancedconfig_ui.pack_forget()
-        self.frame.pack()
-        self.advancedconfig_ui = None
+        if self.advancedconfig_ui:
+            self.advancedconfig_ui.pack_forget()
+            self.frame.pack()
+            self.advancedconfig_ui = None
 
     def run_config(self) -> None:
         if self.config_current_digit == len(self.config_digits):
@@ -209,16 +213,18 @@ class app(tk.Tk):
 
     def init_advancedtimer(self) -> None:
         self.hide_advancedconfig_ui()
-        self.timer_queue = ClockConfig.generate_timers()
-        self.timer_queue.insert(0, CountdownTimer())
-        self.timer: Timer = None
+        if self.last_state is not AppState.PAUSED:
+            self.timer_queue = ClockConfig.generate_timers()
+            self.timer_queue.insert(0, CountdownTimer())
+            self.timer = None
 
         def advancedtimer_on_server_update(msg: str) -> None:
             msg = msg.upper()
             if msg == MsgEnum.STOP.value:
                 pass
             if msg == MsgEnum.PAUSE.value:
-                pass
+                self.timer.pause()
+                self.transition(AppState.PAUSED)
             if msg == MsgEnum.RESTART.value:
                 self.job_queue.append(lambda: self.timer.restart())
 
@@ -237,6 +243,30 @@ class app(tk.Tk):
         else:
             self.kill_timer(self.timer)
             self.timer = None
+
+    def init_clock(self) -> None:
+        def clock_on_server_update(msg):
+            msg = msg.upper()
+            if msg.isdigit():
+                self.transition(AppState.CONFIG, transition_data=[int(msg)])
+            elif msg == MsgEnum.CONFIG.value:
+                self.job_queue.append(self.show_advancedconfig_ui)
+            elif msg == MsgEnum.POWER.value:
+                self.transition(AppState.HIDDEN)
+        ServerController.on_update = clock_on_server_update
+        self.current_clock_time = self.datetime_now()
+        self.info_stringvar.set(Strings.config)
+        self.show_current_time()
+
+    def run_clock(self) -> None:
+        current_date_time = self.datetime_now()
+        if current_date_time != self.current_clock_time:
+            self.current_clock_time = current_date_time
+            self.show_current_time()
+
+    @staticmethod
+    def datetime_now() -> datetime.datetime:
+        return datetime.datetime.now()
 
     def on_advancedconfig_confirm(self) -> None:
         self.transition(AppState.ADVANCEDTIMER)
@@ -286,7 +316,7 @@ class app(tk.Tk):
         def paused_on_server_update(msg: str) -> None:
             msg = msg.upper()
             if msg == MsgEnum.PLAY.value:
-                self.transition(AppState.RUNNING)
+                self.transition(self.last_state)
                 print('resuming')
                 self.timer.resume()
             elif msg == MsgEnum.RESTART.value:
@@ -298,6 +328,19 @@ class app(tk.Tk):
 
     def run_paused(self) -> None:
         self.set_clock(self.timer.time_remaining)
+
+    def init_hidden(self) -> None:
+        self.clock_stringvar.set('')
+        self.info_stringvar.set('')
+
+        def hidden_on_server_update(msg: str) -> None:
+            msg = msg.upper()
+            if msg == MsgEnum.POWER.value:
+                self.transition(self.last_state)
+        ServerController.on_update = hidden_on_server_update
+
+    def run_hidden(self) -> None:
+        pass
 
     def initialize_server(self):
         """
@@ -408,6 +451,16 @@ class app(tk.Tk):
                 self.init_paused()
             else:
                 self.run_paused()
+        elif self.state == AppState.CLOCK:
+            if self.state_cycles[AppState.CLOCK] == 0:
+                self.init_clock()
+            else:
+                self.run_clock()
+        elif self.state == AppState.HIDDEN:
+            if self.state_cycles[AppState.HIDDEN] == 0:
+                self.init_hidden()
+            else:
+                self.run_hidden()
         else:
             pass
 
@@ -429,6 +482,7 @@ class app(tk.Tk):
             return True
         except Exception as e:
             # On exception close app
+            print(self.state)
             return self.kill_app(e)
 
 

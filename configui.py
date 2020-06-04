@@ -9,7 +9,7 @@ from datetime import timedelta
 from webserver import ServerController, run_server, stop_server, MsgEnum
 from globalconfig import GlobalConfig
 from enum import Enum
-from lib import int_list_to_int
+from lib import int_list_to_int, beep
 import inspect
 from timer import Timer
 
