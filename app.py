@@ -161,7 +161,7 @@ class app(tk.Tk):
 
         def config_on_server_update(msg: str) -> None:
             msg = msg.upper()
-            if (msg == MsgEnum.START.value) and self.last_time_delta.seconds > 0:
+            if (msg == MsgEnum.START.value) and self.config_digits:
                 while len(self.config_digits) < self.config_max_digits:
                     self.config_digits.insert(0, 0)
                 return
